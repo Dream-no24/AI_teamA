@@ -1,0 +1,4 @@
+forAuto-image/*
+!forAuto-image/classes.txt
+forAuto-output/*
+!forAuto-output/classes.txt
