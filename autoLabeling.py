@@ -2,6 +2,7 @@ import sys
 import os
 import cv2
 import torch
+import numpy as np
 from pathlib import Path
 
 # YOLOv5 경로를 autoLabeling.py 위치 기준으로 추가
@@ -15,89 +16,71 @@ from utils.torch_utils import select_device
 from utils.general import check_img_size, non_max_suppression
 
 def load_model(model_path):
-    """
-    YOLOv5 모델 로드
-    Args:
-        model_path (str): YOLOv5 학습된 모델(.pt) 경로
-    Returns:
-        모델 객체
-    """
     device = select_device("")  # GPU/CPU 자동 선택
     model = DetectMultiBackend(model_path, device=device)  # 모델 로드
     model.warmup()  # 워밍업 (옵션)
     return model
 
-def detect_and_save(image_path, model, output_dir, img_size=640, conf_thres=0.25, iou_thres=0.45):
-    """
-    이미지 탐지 및 결과 저장
-    Args:
-        image_path (str): 입력 이미지 경로
-        model: 로드된 YOLO 모델
-        output_dir (str): 결과 저장 디렉터리
-    """
-    # 이미지 로드
+def detect_and_save(image_path, model, output_dir, img_size=640, conf_thres=0.1, iou_thres=0.45, repeat=10):
     image = cv2.imread(image_path)
     if image is None:
         print(f"이미지를 로드할 수 없습니다: {image_path}")
         return
 
-    # 이미지 크기 가져오기
     img_height, img_width = image.shape[:2]
 
-    # 모델 추론 준비
     img_size = check_img_size(img_size, s=model.stride)
     img = cv2.resize(image, (img_size, img_size))
     img = torch.from_numpy(img).float() / 255.0  # [0, 255] -> [0, 1]
     img = img.permute(2, 0, 1).unsqueeze(0)  # [HWC] -> [NCHW]
 
-    # 모델 추론
-    pred = model(img)
-    pred = non_max_suppression(pred, conf_thres, iou_thres)
+    results_list = []
+    for _ in range(repeat):
+        pred = model(img)
+        pred = non_max_suppression(pred, conf_thres, iou_thres)
+        detections = []  # 빈 리스트로 초기화
+        if pred[0] is not None:
+            for det in pred[0]:
+                x1, y1, x2, y2, conf, cls = det.tolist()
+                x_center = (x1 + x2) / 2
+                y_center = (y1 + y2) / 2
+                width = x2 - x1
+                height = y2 - y1
 
-    # 탐지 결과 정리 및 정규화
-    detections = []
-    for det in pred[0]:  # 첫 번째 이미지의 결과만 가져옴
-        x1, y1, x2, y2, conf, cls = det.tolist()
-        x_center = (x1 + x2) / 2
-        y_center = (y1 + y2) / 2
-        width = x2 - x1
-        height = y2 - y1
+                # **정규화된 좌표 계산** (이미지 크기로 나누기)
+                x_center /= img_width
+                y_center /= img_height
+                width /= img_width
+                height /= img_height
 
-        # 정규화된 좌표 계산
-        x_center /= img_width
-        y_center /= img_height
-        width /= img_width
-        height /= img_height
+                # 정규화된 결과 추가
+                detections.append([cls, x_center, y_center, width, height])
+            results_list.extend(detections)
 
-        # 클래스 번호와 정규화된 좌표 추가
-        detections.append(f"{int(cls)} {x_center:.6f} {y_center:.6f} {width:.6f} {height:.6f}")
+    if not results_list:
+        print(f"탐지 결과가 없습니다: {image_path}")
+        return
 
-    # 결과 저장
+    results_array = np.array(results_list)
+    avg_results = results_array.mean(axis=0)
+
     os.makedirs(output_dir, exist_ok=True)
     image_name = Path(image_path).stem
     output_path = os.path.join(output_dir, f"{image_name}.txt")
+
     with open(output_path, 'w') as f:
-        f.write("\n".join(detections))
+        f.write(f"{int(avg_results[0])} {avg_results[1]:.6f} {avg_results[2]:.6f} {avg_results[3]:.6f} {avg_results[4]:.6f}")
     print(f"탐지 결과가 저장되었습니다: {output_path}")
 
-def batch_detect_and_save(image_dir, model_path, output_dir):
-    """
-    디렉터리 내 모든 이미지 탐지 및 결과 저장
-    Args:
-        image_dir (str): 이미지 디렉터리 경로
-        model_path (str): YOLO 모델 경로
-        output_dir (str): 결과 저장 디렉터리
-    """
-    # 모델 로드
+def batch_detect_and_save(image_dir, model_path, output_dir, repeat=10):
     model = load_model(model_path)
 
-    # 디렉터리 내 모든 이미지 처리
     for image_file in os.listdir(image_dir):
         if image_file.lower().endswith(('.jpg', '.jpeg', '.png', '.bmp')):
             image_path = os.path.join(image_dir, image_file)
             print(f"처리 중: {image_path}")
             try:
-                detect_and_save(image_path, model, output_dir)
+                detect_and_save(image_path, model, output_dir, repeat=repeat)
             except Exception as e:
                 print(f"오류 발생: {e}, 파일 건너뜀: {image_file}")
 
@@ -106,4 +89,4 @@ image_dir = CURRENT_DIR / "autoData/forAuto-image/"  # 입력 이미지 디렉�
 model_path = CURRENT_DIR / "yolov5/runs/train/exp/weights/best.pt"  # 모델 경로
 output_dir = CURRENT_DIR / "autoData/forAuto-output/"  # 결과 저장 디렉터리
 
-batch_detect_and_save(image_dir, model_path, output_dir)
+batch_detect_and_save(image_dir, model_path, output_dir, repeat=10)
