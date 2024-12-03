@@ -1,8 +1,1 @@
 red
-yellow
-green
-stop_sign
-40_sign
-80_sign
-start_sign
-person
