@@ -11,7 +11,7 @@
 # path: ../datasets/coco  # dataset root dir
 train: ./traffic_images/train/images/   # train images (relative to 'path') 118287 images
 val: ./traffic_images/valid/images/  # val images (relative to 'path') 5000 images
-# test: test-dev2017.txt  # 20288 of 40670 images, submit to https://competitions.codalab.org/competitions/20794
+test: test-dev2017.txt  # 20288 of 40670 images, submit to https://competitions.codalab.org/competitions/20794
 
 # Classes
 nc: 8 # number of classes
