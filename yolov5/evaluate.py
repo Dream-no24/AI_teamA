@@ -51,7 +51,7 @@ def evaluate_model(weights_path, data_path, img_size=640, batch_size=1, device=N
 
 if __name__ == "__main__":
     # 평가에 사용할 가중치 파일 및 데이터셋 구성 파일
-    weights_file = "runs/train/exp4/weights/best.pt"  # 모델 가중치 경로
+    weights_file = "runs/train/exp/weights/best.pt"  # 모델 가중치 경로
     data_file = "data/traffic.yaml"                 # 데이터셋 구성 파일 경로
 
     # 평가 수행
