@@ -14,7 +14,6 @@ sys.path.insert(0, str(YOLOV5_PATH))
 from models.common import DetectMultiBackend
 from utils.torch_utils import select_device
 from utils.general import check_img_size, non_max_suppression
-from utils.augmentations import letterbox  # Letterbox 추가
 
 def load_model(model_path):
     device = select_device("")  # GPU/CPU 자동 선택
@@ -28,11 +27,10 @@ def detect_and_save(image_path, model, output_dir, img_size=640, conf_thres=0.1,
         print(f"이미지를 로드할 수 없습니다: {image_path}")
         return
 
-    # Letterbox로 이미지 비율 유지하며 리사이즈
-    img, ratio, pad = letterbox(image, img_size, stride=model.stride, auto=True)
-    img_height, img_width = image.shape[:2]  # 원본 이미지 크기
+    img_height, img_width = image.shape[:2]
 
-    # 이미지 정규화 및 텐서 변환
+    img_size = check_img_size(img_size, s=model.stride)
+    img = cv2.resize(image, (img_size, img_size))
     img = torch.from_numpy(img).float() / 255.0  # [0, 255] -> [0, 1]
     img = img.permute(2, 0, 1).unsqueeze(0)  # [HWC] -> [NCHW]
 
@@ -44,18 +42,16 @@ def detect_and_save(image_path, model, output_dir, img_size=640, conf_thres=0.1,
         if pred[0] is not None:
             for det in pred[0]:
                 x1, y1, x2, y2, conf, cls = det.tolist()
-                
-                # 패딩과 비율을 고려하여 원본 이미지 좌표로 변환
-                x1 = (x1 - pad[0]) / ratio[0]
-                y1 = (y1 - pad[1]) / ratio[1]
-                x2 = (x2 - pad[0]) / ratio[0]
-                y2 = (y2 - pad[1]) / ratio[1]
+                x_center = (x1 + x2) / 2
+                y_center = (y1 + y2) / 2
+                width = x2 - x1
+                height = y2 - y1
 
-                # 정규화된 좌표 계산 (원본 이미지 크기로 나누기)
-                x_center = (x1 + x2) / 2 / img_width
-                y_center = (y1 + y2) / 2 / img_height
-                width = (x2 - x1) / img_width
-                height = (y2 - y1) / img_height
+                # **정규화된 좌표 계산** (이미지 크기로 나누기)
+                x_center /= img_width
+                y_center /= img_height
+                width /= img_width
+                height /= img_height
 
                 # 정규화된 결과 추가
                 detections.append([cls, x_center, y_center, width, height])
@@ -90,7 +86,7 @@ def batch_detect_and_save(image_dir, model_path, output_dir, repeat=10):
 
 # 사용 예시
 image_dir = CURRENT_DIR / "autoData/forAuto-image/"  # 입력 이미지 디렉터리
-model_path = CURRENT_DIR / "yolov5/runs/train/exp5/weights/best.pt"  # 모델 경로
+model_path = CURRENT_DIR / "yolov5/runs/train/exp/weights/best.pt"  # 모델 경로
 output_dir = CURRENT_DIR / "autoData/forAuto-output/"  # 결과 저장 디렉터리
 
 batch_detect_and_save(image_dir, model_path, output_dir, repeat=10)
