@@ -707,19 +707,19 @@ def main(opt, callbacks=Callbacks()):
             "anchor_t": (False, 2.0, 8.0),  # anchor-multiple threshold
             "anchors": (False, 2.0, 10.0),  # anchors per output grid (0 to ignore)
             "fl_gamma": (False, 0.0, 2.0),  # focal loss gamma (efficientDet default gamma=1.5)
-            "hsv_h": (True, 0.2, 0.1),  # image HSV-Hue augmentation (fraction)
-            "hsv_s": (True, 0.2, 0.9),  # image HSV-Saturation augmentation (fraction)
-            "hsv_v": (True, 0.2, 0.9),  # image HSV-Value augmentation (fraction)
-            "degrees": (True, 0.0, 45.0),  # image rotation (+/- deg)
-            "translate": (True, 0.2, 0.9),  # image translation (+/- fraction)
-            "scale": (True, 0.2, 0.9),  # image scale (+/- gain)
+            "hsv_h": (True, 0.0, 0.1),  # image HSV-Hue augmentation (fraction)
+            "hsv_s": (True, 0.0, 0.9),  # image HSV-Saturation augmentation (fraction)
+            "hsv_v": (True, 0.0, 0.9),  # image HSV-Value augmentation (fraction)
+            "degrees": (True, 15.0, 45.0),  # image rotation (+/- deg)
+            "translate": (True, 0.5, 0.9),  # image translation (+/- fraction)
+            "scale": (True, 0.5, 0.9),  # image scale (+/- gain)
             "shear": (True, 0.0, 10.0),  # image shear (+/- deg)
             "perspective": (True, 0.0, 0.001),  # image perspective (+/- fraction), range 0-0.001
-            "flipud": (True, 0.2, 1.0),  # image flip up-down (probability)
-            "fliplr": (True, 0.2, 1.0),  # image flip left-right (probability)
-            "mosaic": (True, 0.2, 1.0),  # image mosaic (probability)
-            "mixup": (True, 0.2, 1.0),  # image mixup (probability)
-            "copy_paste": (True, 0.2, 1.0),  # segment copy-paste (probability)
+            "flipud": (True, 0.5, 1.0),  # image flip up-down (probability)
+            "fliplr": (True, 0.5, 1.0),  # image flip left-right (probability)
+            "mosaic": (True, 0.5, 1.0),  # image mosaic (probability)
+            "mixup": (True, 0.5, 1.0),  # image mixup (probability)
+            "copy_paste": (True, 0.5, 1.0),  # segment copy-paste (probability)
         }
 
         # GA configs
