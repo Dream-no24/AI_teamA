@@ -13,7 +13,7 @@ sys.path.insert(0, str(YOLOV5_PATH))
 # YOLOv5 모듈 임포트
 from models.common import DetectMultiBackend
 from utils.torch_utils import select_device
-from utils.general import check_img_size, non_max_suppression, box_iou
+from utils.general import non_max_suppression, box_iou
 from utils.augmentations import letterbox  # Letterbox 추가
 
 def load_model(model_path):
@@ -54,50 +54,7 @@ def calculate_iou(box1, box2):
     iou = inter_area / (box1_area + box2_area - inter_area)
     return iou
 
-def merge_boxes(detections, iou_threshold=0.5):
-    """겹치는 박스를 통합하는 함수"""
-    if len(detections) == 0:
-        return []
-    
-    # numpy 배열로 변환
-    detections = np.array(detections)
-    
-    try:
-        x_centers = detections[:, 1]
-        y_centers = detections[:, 2]
-        widths = detections[:, 3]
-        heights = detections[:, 4]
-    except IndexError:
-        print("merge_boxes: 잘못된 데이터 형식입니다.", detections)
-        return []
-
-    # 박스 좌표 계산
-    boxes = np.stack([
-        x_centers - widths / 2,
-        y_centers - heights / 2,
-        x_centers + widths / 2,
-        y_centers + heights / 2
-    ], axis=1)
-    
-    # IoU 통합에서 신뢰도를 고려하지 않으므로 점수는 임의의 값 사용
-    scores = np.ones(len(boxes), dtype=np.float32)
-    
-    # NMS 실행
-    try:
-        indices = torch.ops.torchvision.nms(
-            torch.tensor(boxes, dtype=torch.float32),
-            torch.tensor(scores, dtype=torch.float32),
-            iou_threshold
-        )
-    except Exception as e:
-        print("merge_boxes: NMS 실행 중 오류 발생:", e)
-        return []
-
-    # NMS 통과한 결과만 반환
-    merged_detections = detections[indices.numpy()]
-    return merged_detections.tolist()
-
-def detect_and_save(image_path, model, output_dir, img_size=640, conf_thres=0.1, iou_thres=0.45, repeat=10):
+def detect_and_save(image_path, model, output_dir, img_size=640, conf_thres=0.1, iou_thres=0.45):
     image = cv2.imread(image_path)
     if image is None:
         print(f"이미지를 로드할 수 없습니다: {image_path}")
@@ -111,32 +68,31 @@ def detect_and_save(image_path, model, output_dir, img_size=640, conf_thres=0.1,
     img = torch.from_numpy(img).float() / 255.0  # [0, 255] -> [0, 1]
     img = img.permute(2, 0, 1).unsqueeze(0)  # [HWC] -> [NCHW]
 
-    results_list = []
-    for _ in range(repeat):
-        pred = model(img)
-        pred = non_max_suppression(pred, conf_thres, iou_thres)
-        detections = []  # 빈 리스트로 초기화
-        if pred[0] is not None:
-            for det in pred[0]:
-                x1, y1, x2, y2, conf, cls = det.tolist()
-                
-                # 패딩과 비율을 고려하여 원본 이미지 좌표로 변환
-                x1 = (x1 - pad[0]) / ratio[0]
-                y1 = (y1 - pad[1]) / ratio[1]
-                x2 = (x2 - pad[0]) / ratio[0]
-                y2 = (y2 - pad[1]) / ratio[1]
+    # YOLOv5 예측
+    pred = model(img)
+    pred = non_max_suppression(pred, conf_thres, iou_thres)
 
-                # 정규화된 좌표 계산 (원본 이미지 크기로 나누기)
-                x_center = (x1 + x2) / 2 / img_width
-                y_center = (y1 + y2) / 2 / img_height
-                width = (x2 - x1) / img_width
-                height = (y2 - y1) / img_height
+    detections = []
+    if pred[0] is not None:
+        for det in pred[0]:
+            x1, y1, x2, y2, conf, cls = det.tolist()
+            
+            # 패딩과 비율을 고려하여 원본 이미지 좌표로 변환
+            x1 = (x1 - pad[0]) / ratio[0]
+            y1 = (y1 - pad[1]) / ratio[1]
+            x2 = (x2 - pad[0]) / ratio[0]
+            y2 = (y2 - pad[1]) / ratio[1]
 
-                # 정규화된 결과 추가
-                detections.append([cls, x_center, y_center, width, height])
-            results_list.extend(detections)
+            # 정규화된 좌표 계산 (원본 이미지 크기로 나누기)
+            x_center = (x1 + x2) / 2 / img_width
+            y_center = (y1 + y2) / 2 / img_height
+            width = (x2 - x1) / img_width
+            height = (y2 - y1) / img_height
 
-    if not results_list:
+            # 정규화된 결과 추가
+            detections.append([cls, x_center, y_center, width, height])
+
+    if not detections:
         print(f"탐지 결과가 없습니다: {image_path}")
         return
 
@@ -147,7 +103,7 @@ def detect_and_save(image_path, model, output_dir, img_size=640, conf_thres=0.1,
 
     # 새로운 결과 중 기존에 겹치지 않는 것만 추가
     new_results = []
-    for detection in results_list:
+    for detection in detections:
         _, x_center, y_center, width, height = detection
         is_unique = True
         for existing in existing_labels:
@@ -172,7 +128,7 @@ def detect_and_save(image_path, model, output_dir, img_size=640, conf_thres=0.1,
     
     print(f"탐지 결과가 저장되었습니다: {output_path}")
 
-def batch_detect_and_save(image_dir, model_path, output_dir, repeat=10):
+def batch_detect_and_save(image_dir, model_path, output_dir):
     model = load_model(model_path)
 
     for image_file in os.listdir(image_dir):
@@ -180,13 +136,12 @@ def batch_detect_and_save(image_dir, model_path, output_dir, repeat=10):
             image_path = os.path.join(image_dir, image_file)
             print(f"처리 중: {image_path}")
             try:
-                detect_and_save(image_path, model, output_dir, repeat=repeat)
+                detect_and_save(image_path, model, output_dir)
             except Exception as e:
                 print(f"오류 발생: {e}, 파일 건너뜀: {image_file}")
 
-# 사용 예시
 image_dir = CURRENT_DIR / "datasets/RGB_lights/images" # "autoData/forAuto-image/"  # 입력 이미지 디렉터리
 model_path = CURRENT_DIR / "yolov5/runs/train/exp11/weights/best.pt"  # 모델 경로
 output_dir = CURRENT_DIR / "datasets/RGB_lights/labels" # "autoData/forAuto-output/"  # 결과 저장 디렉터리
 
-batch_detect_and_save(image_dir, model_path, output_dir, repeat=10)
+batch_detect_and_save(image_dir, model_path, output_dir)
